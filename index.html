@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#101827">
+<title>Risk España — prototipo</title>
+<style>
+:root{--bg:#101827;--panel:#1b2638;--panel2:#243247;--ink:#f4f7fb;--muted:#aab7c8;--gold:#f5c451;--line:#3c4c63}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{padding:14px 16px 10px;background:#0c1320;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
+h1{font-size:19px;margin:0}header small{color:var(--muted)}button,select{font:inherit;border:1px solid #52647c;background:#2b3a50;color:var(--ink);border-radius:10px;padding:10px 12px;touch-action:manipulation}
+button.primary{background:var(--gold);color:#201a0a;border-color:var(--gold);font-weight:800}button:disabled{opacity:.4}
+main{max-width:1150px;margin:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,.8fr);gap:12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}.maphead{padding:10px 12px;display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid var(--line)}.maphead span{color:var(--muted);font-size:12px}
+#mapwrap{padding:8px;background:#14263b;position:relative}svg{width:100%;height:auto;display:block;touch-action:manipulation}
+.land{fill:#526579;stroke:#111b2a;stroke-width:2.2;stroke-linejoin:round;cursor:pointer}.land.selected{stroke:#fff;stroke-width:4}.land.target{stroke:#ffe08a;stroke-width:4;stroke-dasharray:5 3}.land:active{opacity:.8}
+.territory-label{font-size:10px;fill:#fff;text-anchor:middle;pointer-events:none;font-weight:700;paint-order:stroke;stroke:#1a2635;stroke-width:2px;stroke-linejoin:round}.army{font-size:12px;fill:#fff;text-anchor:middle;pointer-events:none;font-weight:900}.legend{display:flex;gap:9px;flex-wrap:wrap;padding:10px 12px;color:var(--muted);font-size:12px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+.side{padding:14px}.side h2{font-size:16px;margin:0 0 10px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px}.stat{background:var(--panel2);padding:9px;border-radius:10px}.stat b{display:block;font-size:19px}.stat span{font-size:11px;color:var(--muted)}
+#status{background:#111b2b;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:12px;line-height:1.4}.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.actions button{min-height:42px}.wide{grid-column:1/-1}
+#selectedInfo{padding:10px;background:var(--panel2);border-radius:10px;margin:12px 0;color:var(--muted);line-height:1.45}.log{font-size:12px;color:var(--muted);line-height:1.45;max-height:150px;overflow:auto;margin-top:10px}.log div{padding:5px 0;border-bottom:1px solid #344258}
+.setup{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.setup label{font-size:12px;color:var(--muted)}
+footer{max-width:1150px;margin:0 auto;padding:0 12px 18px;color:var(--muted);font-size:12px;line-height:1.4}
+@media(max-width:760px){main{display:flex;flex-direction:column;padding:8px;gap:8px}header{padding:12px}h1{font-size:17px}.maphead{align-items:flex-start}.side{padding:12px}.log{max-height:110px}#mapwrap{padding:3px}.territory-label{font-size:10px}.army{font-size:12px}}
+</style>
+</head>
+<body>
+<header><div><h1>RISK · ESPAÑA</h1><small>Prototipo 0.2 · táctico y táctil</small></div><div style="display:flex;gap:6px"><button id="saveGame">Guardar</button><button id="newGame">Nueva partida</button></div></header>
+<main>
+<section class="panel">
+ <div class="maphead"><div><b>España peninsular e islas</b><br><span>Toca un territorio para seleccionarlo</span></div><div class="setup"><label for="mode">Modo</label><select id="mode"><option value="ai">Contra IA</option><option value="local">2 jugadores local</option></select></div></div>
+ <div id="mapwrap"><svg id="map" viewBox="0 0 620 650" role="img" aria-label="Mapa esquemático de territorios españoles"></svg></div>
+ <div class="legend" id="legend"></div>
+</section>
+<aside class="panel side">
+ <h2 id="turnTitle">Turno del jugador</h2>
+ <div class="stats"><div class="stat"><b id="turnNo">1</b><span>RONDA</span></div><div class="stat"><b id="owned">0</b><span>TERRITORIOS</span></div><div class="stat"><b id="troops">0</b><span>EJÉRCITOS</span></div></div>
+ <div id="status">Selecciona un territorio propio para empezar.</div>
+ <div class="actions">
+  <button id="reinforce">Refuerzos</button><button id="attack">Atacar</button>
+  <button id="fortify">Mover tropas</button><button id="endTurn" class="primary">Terminar turno</button>
+  <button id="cancel">Cancelar selección</button><button id="loadGame">Cargar partida</button>
+ </div>
+ <div id="selectedInfo">Selecciona un territorio del mapa para ver su información.</div>
+ <h2>Registro de partida</h2><div class="log" id="log"></div>
+</aside>
+</main>
+<footer>Prototipo funcional para iPad: selección táctil, turnos, refuerzos, combate con dados simplificado, movimiento de tropas y guardado local de partida. El mapa es esquemático, no representa todavía las fronteras geográficas oficiales de las provincias. El mapa y la adyacencia siguen siendo esquemáticos; el siguiente hito es incorporar fronteras provinciales geográficas reales. Para guardado persistente, abre desde Safari.</footer>
+<script>
+const territories = [
+["A Coruña",80,68,0],["Lugo",154,54,0],["Asturias",125,108,0],["Cantabria",192,100,0],["Bizkaia",247,94,0],["Gipuzkoa",286,90,0],["Pontevedra",69,119,0],["Ourense",104,155,0],["León",177,151,0],["Palencia",218,140,0],["Burgos",251,132,0],["La Rioja",288,130,0],["Navarra",322,125,0],["Huesca",365,151,0],["Lleida",404,170,0],["Girona",455,156,0],["Barcelona",441,198,0],["Zamora",153,194,0],["Valladolid",201,190,0],["Soria",256,182,0],["Zaragoza",326,191,0],["Tarragona",409,224,0],["Salamanca",142,239,0],["Ávila",190,235,0],["Segovia",226,223,0],["Guadalajara",271,225,0],["Teruel",330,239,0],["Castellón",385,266,0],["Madrid",235,267,0],["Cáceres",144,291,0],["Toledo",220,307,0],["Cuenca",277,292,0],["Valencia",345,298,0],["Badajoz",143,346,0],["Ciudad Real",222,355,0],["Albacete",289,345,0],["Alicante",352,350,0],["Córdoba",198,405,0],["Jaén",257,398,0],["Murcia",320,395,0],["Huelva",133,431,0],["Sevilla",177,444,0],["Granada",263,443,0],["Almería",319,442,0],["Cádiz",171,478,0],["Málaga",228,477,0],["Ceuta",185,510,0],["Melilla",341,505,0],["Mallorca",465,275,0],["Menorca",508,251,0],["Ibiza",444,308,0],["Tenerife",70,570,0],["Gran Canaria",121,585,0]
+];
+const colors=["#3478c9","#d9564f","#e3aa32","#8c65bd"];
+const names=["Azul","Rojo","Amarillo","Morado"];
+let adj={}, state={}, current=0, round=1, phase="reinforce", reinforcements=0, selected=null, attackSource=null, moveSource=null, gameOver=false, reinforcementStarted=false;
+const svg=document.getElementById("map");
+function buildAdj(){
+ adj={};territories.forEach(([n])=>adj[n]=new Set());
+ // Connect nearby territories based on their schematic positions; distances chosen to create a connected board.
+ territories.forEach(([a,x,y],i)=>territories.forEach(([b,xx,yy],j)=>{if(i<j&&Math.hypot(x-xx,y-yy)<67){adj[a].add(b);adj[b].add(a)}}));
+ // Explicit links ensure island and peripheral territories connect to mainland.
+ [["Tenerife","Gran Canaria"],["Mallorca","Menorca"],["Mallorca","Valencia"],["Mallorca","Tarragona"],["Ibiza","Valencia"],["Ibiza","Alicante"],["Ceuta","Cádiz"],["Melilla","Almería"],["Gran Canaria","Huelva"]].forEach(([a,b])=>{adj[a].add(b);adj[b].add(a)});
+}
+function addLog(s){let d=document.createElement("div");d.textContent=s;document.getElementById("log").prepend(d)}
+function newGame(){
+ buildAdj();state={};territories.forEach(([n])=>state[n]={owner:-1,armies:1});
+ let order=[...territories.map(t=>t[0])].sort(()=>Math.random()-.5);
+ order.forEach((n,i)=>state[n].owner=i%2);
+ territories.forEach(([n])=>state[n].armies=state[n].owner===0?2:1);
+ current=0;round=1;phase="reinforce";reinforcements=0;selected=null;attackSource=null;moveSource=null;gameOver=false;reinforcementStarted=false;
+ document.getElementById("log").innerHTML="";addLog("Nueva partida. Los territorios se han repartido aleatoriamente.");setStatus("Tu turno: pulsa «Refuerzos» para desplegar ejércitos.");render();
+}
+function ownerName(o){return o===0?"Jugador 1":o===1?(document.getElementById("mode").value==="ai"?"IA":"Jugador 2"):names[o]||"Sin dueño"}
+function render(){
+ svg.innerHTML="";
+ // abstract Iberian silhouette backdrop
+ const ns="http://www.w3.org/2000/svg";
+ let bg=document.createElementNS(ns,"path");bg.setAttribute("d","M45 55 L190 32 L292 48 L386 77 L468 112 L500 188 L473 253 L432 323 L382 389 L321 456 L246 493 L171 478 L112 432 L80 365 L56 282 L36 196 Z");bg.setAttribute("fill","#243b51");bg.setAttribute("stroke","#49647b");bg.setAttribute("stroke-width","2");svg.appendChild(bg);
+ territories.forEach(([n,x,y],i)=>{
+  let g=document.createElementNS(ns,"g");
+  let r=document.createElementNS(ns,"rect");r.setAttribute("x",x-22);r.setAttribute("y",y-15);r.setAttribute("width",44);r.setAttribute("height",30);r.setAttribute("rx",10);r.setAttribute("class","land"+(selected===n?" selected":"")+(attackSource===n||moveSource===n?" selected":"")+(selected&&adj[selected]?.has(n)&&state[n].owner!==current&&phase==="attack"?" target":""));
+  r.setAttribute("fill",state[n].owner>=0?colors[state[n].owner%4]:"#596779");r.addEventListener("click",()=>clickTerritory(n));g.appendChild(r);
+  let label=document.createElementNS(ns,"text");label.setAttribute("x",x);label.setAttribute("y",y-1);label.setAttribute("class","territory-label");label.textContent=n.length>11?n.slice(0,10)+"…":n;g.appendChild(label);
+  let army=document.createElementNS(ns,"text");army.setAttribute("x",x);army.setAttribute("y",y+12);army.setAttribute("class","army");army.textContent=state[n].armies;g.appendChild(army);svg.appendChild(g);
+ });
+ document.getElementById("turnTitle").textContent=ownerName(current)+" · "+phaseLabel();
+ let mine=Object.values(state).filter(t=>t.owner===current);document.getElementById("turnNo").textContent=round;document.getElementById("owned").textContent=mine.length;document.getElementById("troops").textContent=mine.reduce((a,t)=>a+t.armies,0);
+ document.getElementById("legend").innerHTML=[0,1].map(o=>`<span><i class="dot" style="background:${colors[o]}"></i>${ownerName(o)}</span>`).join("");
+ document.getElementById("reinforce").disabled=(phase!=="reinforce"||gameOver||reinforcements>0);document.getElementById("attack").disabled=!((phase==="attack")||(phase==="reinforce"&&reinforcementStarted&&reinforcements===0))||gameOver;document.getElementById("fortify").disabled=(phase!=="move"||gameOver);document.getElementById("endTurn").disabled=gameOver;
+ if(selected&&state[selected]){let t=state[selected];document.getElementById("selectedInfo").textContent=`${selected} · ${ownerName(t.owner)} · ${t.armies} ejército(s) · Vecinos: ${[...adj[selected]].join(", ")}`;}else document.getElementById("selectedInfo").textContent="Selecciona un territorio del mapa para ver su información.";
+}
+function phaseLabel(){return {reinforce:"Refuerzos",attack:"Ataque",move:"Movimiento",done:"Turno finalizado"}[phase]||phase}
+function setStatus(s){document.getElementById("status").textContent=s}
+function clickTerritory(n){
+ if(gameOver)return;
+ if(phase==="reinforce"){
+  selected=n;if(state[n].owner===current&&reinforcements>0){state[n].armies++;reinforcements--;addLog(`${ownerName(current)} refuerza ${n}. Quedan ${reinforcements}.`);setStatus(reinforcements?`Refuerzo colocado. Quedan ${reinforcements} por distribuir.`:"Refuerzos distribuidos. Ya puedes atacar o terminar el turno.");}
+  else setStatus(state[n].owner===current?"Pulsa Refuerzos y luego un territorio propio.":"Solo puedes reforzar territorios propios.");
+ }else if(phase==="attack"){
+  if(!attackSource){if(state[n].owner===current&&state[n].armies>1){attackSource=n;selected=n;setStatus(`Origen ${n}. Ahora selecciona un territorio enemigo adyacente.`)}else setStatus("Selecciona un territorio propio con al menos 2 ejércitos.");}
+  else if(n===attackSource){attackSource=null;setStatus("Ataque cancelado.");}
+  else if(state[n].owner!==current&&adj[attackSource].has(n)){doAttack(attackSource,n);attackSource=null;}
+  else if(state[n].owner===current&&state[n].armies>1){attackSource=n;selected=n;setStatus(`Origen cambiado a ${n}. Elige un enemigo adyacente.`)}
+  else setStatus("El objetivo debe ser enemigo y adyacente.");
+ }else if(phase==="move"){
+  if(!moveSource){if(state[n].owner===current&&state[n].armies>1){moveSource=n;selected=n;setStatus(`Origen ${n}. Selecciona destino propio adyacente.`)}else setStatus("Selecciona un territorio propio con más de un ejército.");}
+  else if(state[n].owner===current&&adj[moveSource].has(n)&&n!==moveSource){state[moveSource].armies--;state[n].armies++;addLog(`Movimiento: ${moveSource} → ${n}.`);moveSource=null;selected=n;setStatus("Movimiento realizado. Termina el turno.");}
+  else setStatus("El destino debe ser propio y adyacente.");
+ }else selected=n;
+ render();
+}
+function doAttack(a,b){
+ let attackDice=Math.min(3,state[a].armies-1),defDice=Math.min(2,state[b].armies);
+ let at=Array.from({length:attackDice},()=>1+Math.floor(Math.random()*6)).sort((x,y)=>y-x),de=Array.from({length:defDice},()=>1+Math.floor(Math.random()*6)).sort((x,y)=>y-x);
+ for(let i=0;i<Math.min(at.length,de.length);i++){if(at[i]>de[i])state[b].armies--;else state[a].armies--;}
+ addLog(`${ownerName(current)} ataca ${b} desde ${a}: ${at.join(",")} contra ${de.join(",")}.`);
+ if(state[b].armies<=0){state[b].owner=current;state[b].armies=1;state[a].armies=Math.max(1,state[a].armies-1);addLog(`${ownerName(current)} conquista ${b}.`);setStatus(`¡Territorio conquistado: ${b}!`);checkWin();}
+ else setStatus(`Combate terminado. ${a}: ${state[a].armies}; ${b}: ${state[b].armies}.`);
+ selected=b;render();
+}
+function checkWin(){let alive=[...new Set(Object.values(state).map(t=>t.owner))];if(alive.length===1){gameOver=true;setStatus(`Fin de la partida: gana ${ownerName(alive[0])}.`);addLog(`Victoria de ${ownerName(alive[0])}.`)}}
+document.getElementById("reinforce").onclick=()=>{if(phase!=="reinforce"||reinforcements>0||gameOver)return;reinforcements=Math.max(3,Math.floor(Object.values(state).filter(t=>t.owner===current).length/3));reinforcementStarted=true;setStatus(`Distribuye ${reinforcements} refuerzos: pulsa territorios propios. Cuando acabes, podrás atacar.`);render();};
+document.getElementById("attack").onclick=()=>{if(phase==="reinforce"&&!reinforcementStarted){setStatus("Pulsa Refuerzos primero.");return;}if(reinforcements>0){setStatus(`Todavía quedan ${reinforcements} refuerzos por distribuir.`);return;}phase="attack";attackSource=null;setStatus("Selecciona un territorio propio con más de un ejército y después un enemigo adyacente.");render()};
+document.getElementById("fortify").onclick=()=>{if(phase==="reinforce"&&(!reinforcementStarted||reinforcements>0)){setStatus("Distribuye primero todos los refuerzos.");return;}phase="move";moveSource=null;setStatus("Selecciona un territorio propio con más de un ejército y después otro propio adyacente.");render()};
+document.getElementById("endTurn").onclick=()=>{
+ if(gameOver)return;
+ attackSource=null;moveSource=null;
+ if(current===0&&document.getElementById("mode").value==="ai"){current=1;phase="reinforce";reinforcements=0;reinforcementStarted=false;aiTurn();}else{current=0;round++;phase="reinforce";reinforcements=0;reinforcementStarted=false;setStatus("Nuevo turno. Pulsa Refuerzos para recibir ejércitos.");}
+ render();
+};
+document.getElementById("cancel").onclick=()=>{selected=null;attackSource=null;moveSource=null;setStatus("Selección cancelada.");render()};
+document.getElementById("newGame").onclick=()=>{if(confirm("¿Empezar una partida nueva? Se perderá la partida actual si no la has guardado."))newGame()};
+document.getElementById("saveGame").onclick=()=>{try{localStorage.setItem("riskEspanaSave",JSON.stringify({state,current,round,phase,reinforcements,reinforcementStarted,log:document.getElementById("log").innerHTML,mode:document.getElementById("mode").value}));setStatus("Partida guardada en este navegador.");}catch(e){setStatus("No se pudo guardar en este modo de navegación. Prueba a abrirlo desde Safari.");}};
+document.getElementById("loadGame").onclick=()=>{try{const s=JSON.parse(localStorage.getItem("riskEspanaSave")||"null");if(!s){setStatus("No hay ninguna partida guardada en este navegador.");return;}state=s.state;current=s.current;round=s.round;phase=s.phase;reinforcements=s.reinforcements;reinforcementStarted=!!s.reinforcementStarted;document.getElementById("mode").value=s.mode||"ai";document.getElementById("log").innerHTML=s.log||"";selected=null;attackSource=null;moveSource=null;gameOver=false;setStatus("Partida cargada.");render();}catch(e){setStatus("No se pudo cargar la partida.");}};
+document.getElementById("mode").onchange=()=>{newGame()};
+function aiTurn(){
+ setStatus("La IA está jugando…");
+ let own=territories.map(t=>t[0]).filter(n=>state[n].owner===1);
+ let rein=Math.max(3,Math.floor(own.length/3));for(let i=0;i<rein;i++){let n=own[Math.floor(Math.random()*own.length)];state[n].armies++;}
+ for(let k=0;k<12;k++){
+  own=territories.map(t=>t[0]).filter(n=>state[n].owner===1&&state[n].armies>1);
+  let options=[];own.forEach(a=>[...adj[a]].forEach(b=>{if(state[b].owner!==1)options.push([a,b])}));
+  if(!options.length)break;
+  options.sort((p,q)=>state[p[0]].armies-state[p[1]].armies-(state[q[0]].armies-state[q[1]].armies));
+  let [a,b]=options[options.length-1];if(state[a].armies<2)break;doAttackAI(a,b);
+  if(gameOver)return;
+ }
+ current=0;round++;phase="reinforce";reinforcements=0;reinforcementStarted=false;setStatus("Turno del Jugador 1. Pulsa Refuerzos para continuar.");
+}
+function doAttackAI(a,b){
+ let ad=Math.min(3,state[a].armies-1),dd=Math.min(2,state[b].armies),at=Array.from({length:ad},()=>1+Math.random()*6).map(Math.floor).sort((x,y)=>y-x),de=Array.from({length:dd},()=>1+Math.random()*6).map(Math.floor).sort((x,y)=>y-x);
+ for(let i=0;i<Math.min(at.length,de.length);i++){if(at[i]>de[i])state[b].armies--;else state[a].armies--;}
+ addLog(`IA ataca ${b} desde ${a}.`);
+ if(state[b].armies<=0){state[b].owner=1;state[b].armies=1;state[a].armies=Math.max(1,state[a].armies-1);addLog(`IA conquista ${b}.`);checkWin();}
+}
+newGame();
+</script>
+</body>
+</html>
