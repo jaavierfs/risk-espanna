@@ -1,38 +1,29 @@
 # Risk España
 
-Prototipo web de un juego de estrategia inspirado en Risk, con un mapa de las provincias de España. Está pensado para ejecutarse en Safari en iPad y en navegadores de escritorio.
+Prototipo web de un juego de estrategia inspirado en Risk, con territorios provinciales españoles. Está pensado para Safari en iPad y navegadores de escritorio.
 
-## Estado actual: versión 0.3
+## Versión 0.4 — mapa corregido
 
-- Mapa con geometrías provinciales reales cargadas desde un GeoJSON público.
-- Selección de provincias mediante toque o clic.
-- Reparto inicial de territorios y tropas.
-- Refuerzos, ataques con dados y movimiento de tropas.
-- Oponente controlado por una IA sencilla.
-- Vista separada para Canarias, Ceuta y Melilla.
-- Guardado y carga local de la partida mediante `localStorage`.
+- Proyección uniforme para la Península y Baleares, evitando estirar el mapa de forma distinta en horizontal y vertical.
+- Recuadros separados para Canarias, Ceuta y Melilla.
+- Geometrías provinciales reales cargadas desde GeoJSON.
+- Selección táctil, refuerzos, ataques con dados, movimiento básico y una IA sencilla.
+- Guardado y carga local en el navegador.
 
-## Cómo publicarlo con GitHub Pages
+## Publicación con GitHub Pages
 
-1. Sube `index.html` a la raíz del repositorio.
+1. Sube `index.html` y `README.md` a la raíz de la rama `main`.
 2. En GitHub, entra en **Settings → Pages**.
-3. En **Build and deployment**, selecciona **Deploy from a branch**.
-4. Elige la rama `main` y la carpeta `/(root)`, y guarda los cambios.
-5. Abre la URL de GitHub Pages en Safari. Si no aparece la versión nueva, recarga la página.
+3. Selecciona **Deploy from a branch**, rama `main` y carpeta `/(root)`.
+4. Abre la URL de GitHub Pages en Safari y recarga la página.
 
-## Requisitos y limitaciones
+## Fuente de los datos geográficos
 
-- La conexión a Internet es necesaria para descargar los límites provinciales del GeoJSON externo.
-- Es un prototipo: las reglas y la IA son simplificadas y no reproducen exactamente las del Risk del vídeo de referencia.
-- Las fronteras compartidas se utilizan para estimar adyacencias terrestres; se añaden conexiones marítimas manuales para islas y ciudades autónomas.
-- La geometría cartográfica procede del proyecto público `codeforamerica/click_that_hood`, archivo `spain-provinces.geojson`. Para una versión de producción, convendría verificar y sustituir estos datos por una fuente oficial del IGN/CNIG.
+El mapa se carga desde el GeoJSON público de [Code for America / click_that_hood](https://github.com/codeforamerica/click_that_hood/blob/master/public/data/spain-provinces.geojson). Hace falta conexión a Internet para cargar las fronteras.
 
-## Próximos pasos recomendados
+## Limitaciones
 
-- Probar en Safari de iPad el mapa, los controles táctiles y el guardado/carga.
-- Revisar las adyacencias provinciales y las conexiones marítimas.
-- Mejorar el modo multijugador local, la IA y el equilibrio de las reglas.
-
-## Licencia y atribución
-
-Este repositorio es un prototipo. Antes de redistribuirlo como producto, revisa las condiciones de licencia del código y de los datos cartográficos utilizados.
+- Es un prototipo; reglas y estrategia de la IA simplificadas.
+- Las conexiones marítimas entre territorios son aproximadas y se definen manualmente.
+- La posición de algunas etiquetas puede necesitar ajustes visuales en pantallas pequeñas.
+- Para un producto final, conviene validar las fronteras con datos oficiales del IGN/CNIG e incorporar el GeoJSON al proyecto para no depender de un servicio externo.

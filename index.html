@@ -20,11 +20,11 @@ main{max-width:1300px;margin:auto;padding:10px;display:grid;grid-template-column
 @media(max-width:760px){main{display:flex;flex-direction:column;padding:7px;gap:8px}header{padding:10px}h1{font-size:17px}.maphead{align-items:flex-start}#mapwrap{padding:2px}.side{padding:10px}.log{max-height:100px}.provlabel{font-size:7px}.armytext{font-size:9px}}
 </style></head>
 <body>
-<header><div><h1>RISK · ESPAÑA</h1><small>Versión 0.3 · fronteras provinciales</small></div><div style="display:flex;gap:6px"><button id="save">Guardar</button><button id="new">Nueva partida</button></div></header>
+<header><div><h1>RISK · ESPAÑA</h1><small>Versión 0.4 · mapa corregido</small></div><div style="display:flex;gap:6px"><button id="save">Guardar</button><button id="new">Nueva partida</button></div></header>
 <main>
 <section class="panel"><div class="maphead"><div><b>Mapa provincial de España</b><br><span id="mapmsg">Cargando fronteras…</span></div><select id="mode" aria-label="Modo de juego"><option value="ai">Contra IA</option><option value="local">2 jugadores local</option></select></div>
 <div id="mapwrap"><div id="loading">Cargando geometría de las provincias…</div><svg id="map" viewBox="0 0 760 650" style="display:none" aria-label="Mapa interactivo de provincias españolas"></svg></div>
-<div class="note">Las fronteras proceden de un GeoJSON público de provincias españolas. Las Canarias y las ciudades autónomas se muestran en recuadros para que el mapa siga siendo legible.</div></section>
+<div class="note">Mapa con proyección uniforme para la Península y Baleares; Canarias, Ceuta y Melilla se colocan en recuadros independientes para evitar deformaciones.</div></section>
 <aside class="panel side"><h2 id="turnTitle">Preparando partida</h2><div class="stats"><div class="stat"><b id="round">1</b><span>RONDA</span></div><div class="stat"><b id="owned">0</b><span>TERRITORIOS</span></div><div class="stat"><b id="troops">0</b><span>EJÉRCITOS</span></div></div>
 <div id="status">Cargando mapa…</div><div class="actions"><button id="reinforce">Refuerzos</button><button id="attack">Atacar</button><button id="move">Mover tropas</button><button id="end" class="primary">Terminar turno</button><button id="cancel">Cancelar selección</button><button id="load">Cargar partida</button></div>
 <div id="selectedInfo">Selecciona una provincia.</div><h2>Registro de partida</h2><div class="log" id="log"></div></aside></main>
@@ -43,15 +43,51 @@ function norm(s){return (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").
 function pname(f){let raw=f.properties.name||f.properties.NAMEUNIT||"Provincia";return ALIASES[raw]||raw}
 function allRings(geom){let out=[];function rec(x){if(!Array.isArray(x))return;if(x.length&&typeof x[0][0]==="number"){out.push(x)}else x.forEach(rec)}rec(geom.coordinates);return out}
 function coordsOf(f){return allRings(f.geometry)}
-function transform(lon,lat,name){
- if(name==="Las Palmas"||name==="Santa Cruz de Tenerife"){return [75+(lon+18.3)*34,535-(lat-27.5)*34]}
- if(name==="Ceuta"){return [655+(lon+5.4)*480,520-(lat-35.85)*480]}
- if(name==="Melilla"){return [695+(lon+3.0)*480,520-(lat-35.3)*480]}
- // Mainland + Balearics use an equirectangular view with latitude correction.
- return [65+(lon+9.5)*48,58+(44.2-lat)*53]
+let MAIN_BOUNDS=null,FEATURE_BOUNDS=new Map();
+function boundsOfFeature(f){
+ let pts=[];for(const ring of coordsOf(f))for(const pt of ring)pts.push(pt);
+ if(!pts.length)return {minX:0,maxX:1,minY:0,maxY:1};
+ return {minX:Math.min(...pts.map(p=>p[0])),maxX:Math.max(...pts.map(p=>p[0])),minY:Math.min(...pts.map(p=>p[1])),maxY:Math.max(...pts.map(p=>p[1]))};
 }
-function pathFor(f){let d="",name=pname(f);for(const ring of coordsOf(f)){ring.forEach((pt,i)=>{let [x,y]=transform(pt[0],pt[1],name);d+=(i?"L":"M")+x.toFixed(1)+","+y.toFixed(1)});d+="Z"}return d}
-function centroid(f){let rings=coordsOf(f).filter(r=>r.length>5);let best=rings.sort((a,b)=>b.length-a.length)[0]||coordsOf(f)[0];let sx=0,sy=0;for(let i=0;i<best.length;i++){sx+=best[i][0];sy+=best[i][1]}return [sx/best.length,sy/best.length]}
+function isCanary(name){return name==="Las Palmas"||name==="Santa Cruz de Tenerife"}
+function isAutonomousCity(name){return name==="Ceuta"||name==="Melilla"}
+function prepareProjection(){
+ FEATURE_BOUNDS.clear();
+ for(const p of provs)FEATURE_BOUNDS.set(p.id,boundsOfFeature(p.feature));
+ // Main map: Península + Baleares, with longitude corrected for latitude.
+ const mainland=provs.filter(p=>!isCanary(p.name)&&!isAutonomousCity(p.name));
+ let pts=[];for(const p of mainland)for(const ring of coordsOf(p.feature))for(const pt of ring)pts.push([pt[0]*Math.cos(39*Math.PI/180),pt[1]]);
+ const minX=Math.min(...pts.map(p=>p[0])),maxX=Math.max(...pts.map(p=>p[0]));
+ const minY=Math.min(...pts.map(p=>p[1])),maxY=Math.max(...pts.map(p=>p[1]));
+ MAIN_BOUNDS={minX,maxX,minY,maxY};
+}
+function fitPoint(x,y,b,box){
+ const pad=8,availW=box.w-2*pad,availH=box.h-2*pad;
+ const dx=Math.max(0.0001,b.maxX-b.minX),dy=Math.max(0.0001,b.maxY-b.minY);
+ const scale=Math.min(availW/dx,availH/dy);
+ const usedW=dx*scale,usedH=dy*scale;
+ return [box.x+pad+(availW-usedW)/2+(x-b.minX)*scale,box.y+pad+(availH-usedH)/2+(b.maxY-y)*scale];
+}
+function transform(lon,lat,name,id){
+ if(isCanary(name)){
+  const b=FEATURE_BOUNDS.get(id)||{minX:lon-.1,maxX:lon+.1,minY:lat-.1,maxY:lat+.1};
+  return fitPoint(lon,lat,b,{x:name==="Las Palmas"?20:105,y:505,w:100,h:130});
+ }
+ if(isAutonomousCity(name)){
+  const b=FEATURE_BOUNDS.get(id)||{minX:lon-.1,maxX:lon+.1,minY:lat-.1,maxY:lat+.1};
+  return fitPoint(lon,lat,b,{x:name==="Ceuta"?625:680,y:520,w:55,h:85});
+ }
+ const x=lon*Math.cos(39*Math.PI/180),y=lat;
+ return fitPoint(x,y,MAIN_BOUNDS,{x:18,y:18,w:724,h:470});
+}
+function pathFor(p){let d="";for(const ring of coordsOf(p.feature)){ring.forEach((pt,i)=>{let [x,y]=transform(pt[0],pt[1],p.name,p.id);d+=(i?"L":"M")+x.toFixed(2)+","+y.toFixed(2)});d+="Z"}return d}
+function centroid(p){
+ // Area-weighted centroid is overkill for this prototype; average the largest exterior ring.
+ let rings=coordsOf(p.feature).filter(r=>r.length>5).sort((a,b)=>b.length-a.length);
+ let ring=rings[0]||coordsOf(p.feature)[0],sx=0,sy=0,n=ring.length;
+ for(const pt of ring){sx+=pt[0];sy+=pt[1]}
+ return [sx/n,sy/n];
+}
 function ownerName(o){return o===0?"Jugador 1":o===1?(document.getElementById("mode").value==="ai"?"IA":"Jugador 2"):"Sin dueño"}
 function log(s){let d=document.createElement("div");d.textContent=s;document.getElementById("log").prepend(d)}
 function status(s){document.getElementById("status").textContent=s}
@@ -66,19 +102,19 @@ function buildAdjacency(){
 function render(){
  svg.innerHTML="";
  // Subtle inset frames
- for(const [x,y,w,h,label] of [[16,510,165,125,"CANARIAS"],[645,475,95,82,"CIUDADES AUTÓNOMAS"]]){
+ for(const [x,y,w,h,label] of [[14,500,195,142,"CANARIAS"],[615,510,130,105,"CEUTA Y MELILLA"]]){
   let r=document.createElementNS(NS,"rect");Object.entries({x,y,width:w,height:h,rx:8,fill:"#192d42",stroke:"#486078","stroke-width":1}).forEach(([k,v])=>r.setAttribute(k,v));svg.appendChild(r);
   let t=document.createElementNS(NS,"text");t.setAttribute("x",x+6);t.setAttribute("y",y+12);t.setAttribute("fill","#91a8bd");t.setAttribute("font-size","8");t.textContent=label;svg.appendChild(t)
  }
  // Draw polygons
  for(const p of provs){
-  const path=document.createElementNS(NS,"path");path.setAttribute("d",pathFor(p.feature));path.setAttribute("class","province"+(selected===p.id?" selected":"")+(attackFrom===p.id||moveFrom===p.id?" selected":"")+(selected&&adj[selected]?.has(p.id)&&state[p.id].owner!==current&&phase==="attack"?" target":""));
+  const path=document.createElementNS(NS,"path");path.setAttribute("d",pathFor(p));path.setAttribute("class","province"+(selected===p.id?" selected":"")+(attackFrom===p.id||moveFrom===p.id?" selected":"")+(selected&&adj[selected]?.has(p.id)&&state[p.id].owner!==current&&phase==="attack"?" target":""));
   path.setAttribute("fill",COLORS[Math.max(0,state[p.id].owner)%COLORS.length]);path.addEventListener("click",()=>clickProv(p.id));path.setAttribute("aria-label",p.name);svg.appendChild(path);
  }
  // Labels and troop badges are positioned from rough polygon centroids.
  for(const p of provs){
-  let [lon,lat]=centroid(p.feature),[x,y]=transform(lon,lat,p.name);
-  if(p.name==="Las Palmas")x-=8;if(p.name==="Santa Cruz de Tenerife")x+=14;
+  let [lon,lat]=centroid(p),[x,y]=transform(lon,lat,p.name,p.id);
+  
   let label=document.createElementNS(NS,"text");label.setAttribute("x",x);label.setAttribute("y",y-1);label.setAttribute("class","provlabel");label.textContent=p.short;svg.appendChild(label);
   let c=document.createElementNS(NS,"circle");c.setAttribute("cx",x);c.setAttribute("cy",y+7);c.setAttribute("r",7);c.setAttribute("class","armybadge");svg.appendChild(c);
   let t=document.createElementNS(NS,"text");t.setAttribute("x",x);t.setAttribute("y",y+10);t.setAttribute("class","armytext");t.textContent=state[p.id].armies;svg.appendChild(t);
@@ -146,8 +182,8 @@ document.getElementById("end").onclick=()=>{if(gameOver)return;attackFrom=null;m
 document.getElementById("cancel").onclick=()=>{selected=null;attackFrom=null;moveFrom=null;status("Selección cancelada.");render()};
 document.getElementById("new").onclick=()=>{if(confirm("¿Empezar una partida nueva?"))startGame()};
 document.getElementById("mode").onchange=()=>startGame();
-document.getElementById("save").onclick=()=>{try{localStorage.setItem("riskEspanaV03",JSON.stringify({state,current,round,phase,reinforcements,reinforcementStarted,mode:document.getElementById("mode").value,log:document.getElementById("log").innerHTML}));status("Partida guardada en este navegador.")}catch(e){status("No se pudo guardar. Abre la página desde Safari.")}};
-document.getElementById("load").onclick=()=>{try{let s=JSON.parse(localStorage.getItem("riskEspanaV03"));if(!s){status("No hay partida guardada.");return}Object.assign(window,{ });state=s.state;current=s.current;round=s.round;phase=s.phase;reinforcements=s.reinforcements;reinforcementStarted=s.reinforcementStarted;document.getElementById("mode").value=s.mode;document.getElementById("log").innerHTML=s.log||"";selected=null;attackFrom=null;moveFrom=null;gameOver=false;status("Partida cargada.");render()}catch(e){status("No se pudo cargar la partida.")}};
+document.getElementById("save").onclick=()=>{try{localStorage.setItem("riskEspanaV04",JSON.stringify({state,current,round,phase,reinforcements,reinforcementStarted,mode:document.getElementById("mode").value,log:document.getElementById("log").innerHTML}));status("Partida guardada en este navegador.")}catch(e){status("No se pudo guardar. Abre la página desde Safari.")}};
+document.getElementById("load").onclick=()=>{try{let s=JSON.parse(localStorage.getItem("riskEspanaV04"));if(!s){status("No hay partida guardada.");return}Object.assign(window,{ });state=s.state;current=s.current;round=s.round;phase=s.phase;reinforcements=s.reinforcements;reinforcementStarted=s.reinforcementStarted;document.getElementById("mode").value=s.mode;document.getElementById("log").innerHTML=s.log||"";selected=null;attackFrom=null;moveFrom=null;gameOver=false;status("Partida cargada.");render()}catch(e){status("No se pudo cargar la partida.")}};
 function startGame(){state={};provs.forEach(p=>state[p.id]={owner:-1,armies:1});let order=provs.map(p=>p.id).sort(()=>Math.random()-.5);order.forEach((id,i)=>state[id].owner=i%2);provs.forEach(p=>state[p.id].armies=state[p.id].owner===0?2:1);current=0;round=1;phase="reinforce";reinforcements=0;reinforcementStarted=false;selected=null;attackFrom=null;moveFrom=null;gameOver=false;document.getElementById("log").innerHTML="";log("Partida nueva: provincias repartidas aleatoriamente.");status("Tu turno. Pulsa Refuerzos para desplegar ejércitos.");render()}
 async function init(){
  try{
@@ -155,7 +191,7 @@ async function init(){
   features=data.features.filter(f=>f.properties&&f.properties.name);
   provs=features.map((f,i)=>{let name=pname(f);let short=name.length>13?name.slice(0,11)+"…":name;return{id:String(f.properties.cod_prov||f.properties.cartodb_id||i),name,short,feature:f}});
   // Keep only Spanish provinces and autonomous cities; the source includes 52 units.
-  buildAdjacency();document.getElementById("loading").style.display="none";svg.style.display="block";document.getElementById("mapmsg").textContent=`${provs.length} territorios · fronteras reales + conexiones marítimas`;
+  buildAdjacency();document.getElementById("loading").style.display="none";svg.style.display="block";prepareProjection();document.getElementById("mapmsg").textContent=`${provs.length} territorios · mapa con proyección corregida`;
   startGame();
  }catch(e){document.getElementById("loading").textContent="No se pudo cargar el mapa. Comprueba la conexión a Internet y recarga la página.";document.getElementById("mapmsg").textContent="Error al cargar las fronteras";status("Error de carga: "+e.message)}
 }
